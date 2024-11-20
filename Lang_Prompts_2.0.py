@@ -86,6 +86,24 @@ def save_prompt_to_db(language, topic, subtopic, scenario, keyword, prompt, user
     conn.commit()
     conn.close()
 
+# Function to get prompts by subtopic or scenario
+def get_prompts_by_subtopic_or_scenario(subtopic=None, scenario=None):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    # If subtopic is provided, get prompts for the given subtopic
+    if subtopic:
+        cursor.execute('''SELECT * FROM prompts WHERE subtopic = ?''', (subtopic,))
+    # If scenario is provided, get prompts for the given scenario
+    elif scenario:
+        cursor.execute('''SELECT * FROM prompts WHERE scenario = ?''', (scenario,))
+    else:
+        return []
+
+    prompts = cursor.fetchall()
+    conn.close()
+    return prompts
+
 # Streamlit app
 st.title('Prompt Generator for ANV Project')
 
