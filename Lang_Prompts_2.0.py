@@ -80,7 +80,7 @@ def save_prompt_to_csv(language, topic, subtopic, scenario, prompt, user_name):
     df.to_csv(file_path, index=False)
 
 # Streamlit app
-st.title('Prompt Generator with Scenarios')
+st.title('Prompt Generator for ANV Project')
 
 # Use session state to store user name
 if 'user_name' not in st.session_state:
