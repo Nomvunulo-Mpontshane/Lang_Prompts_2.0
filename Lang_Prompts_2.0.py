@@ -57,16 +57,7 @@ def save_prompt_to_csv(language, topic, subtopic, prompt, user_name):
 # Streamlit app
 st.title('Prompt Generator with Dynamic Topic-Subtopic Correlation')
 
-# Step 1: Language selection
-language = st.selectbox("Select a language", ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch'])
-
-# Step 2: Topic selection
-selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys()))
-
-# Step 3: Subtopic selection (filtered by selected topic)
-selected_subtopic = st.selectbox("Select a subtopic", topic_subtopic_mapping[selected_topic])
-
-# Step 4: Use session state to store user name (so they don't have to enter it each time)
+# Use session state to store user name (so they don't have to enter it each time)
 if 'user_name' not in st.session_state:
     st.session_state.user_name = ""
 
@@ -75,6 +66,15 @@ if st.session_state.user_name == "":
     st.session_state.user_name = st.text_input("Enter your name (this will be tracked)", "")
 else:
     st.write(f"Welcome, {st.session_state.user_name}!")
+
+# Step 1: Language selection
+language = st.selectbox("Select a language", ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch'])
+
+# Step 2: Topic selection
+selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys()))
+
+# Step 3: Subtopic selection (filtered by selected topic)
+selected_subtopic = st.selectbox("Select a subtopic", topic_subtopic_mapping[selected_topic])
 
 # Step 5: Create new prompt input field
 new_prompt = st.text_input("Enter your new prompt")
