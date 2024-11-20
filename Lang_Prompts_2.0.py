@@ -3,10 +3,10 @@
 
 # In[1]:
 
-
 import streamlit as st
 import pandas as pd
 import os
+from datetime import datetime
 
 # Sample directory to store CSV files
 DATA_DIR = "prompts_data"
@@ -20,27 +20,34 @@ topic_subtopic_mapping = {
     'Education': ['Online Learning', 'Curriculum Design', 'Educational Psychology'],
 }
 
-# Function to save prompts into CSV
-def save_prompt_to_csv(language, topic, subtopic, prompt):
+# Function to save prompts into CSV (including user info and timestamp)
+def save_prompt_to_csv(language, topic, subtopic, prompt, user_name):
     # Construct file name for the CSV based on language, topic, and subtopic
     file_path = os.path.join(DATA_DIR, f"{language}_{topic}_{subtopic}.csv")
 
-    # If the CSV file already exists, append the new prompt
+    # Prepare the prompt data with user info and timestamp
+    prompt_data = {
+        "Prompt": prompt,
+        "User": user_name,
+        "Timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+
+    # If the CSV file already exists, append the new prompt data
     if os.path.exists(file_path):
         df = pd.read_csv(file_path)
-        df = df.append({"Prompt": prompt}, ignore_index=True)
+        df = df.append(prompt_data, ignore_index=True)
     else:
         # If the CSV file doesn't exist, create a new one
-        df = pd.DataFrame({"Prompt": [prompt]})
+        df = pd.DataFrame([prompt_data])
 
     # Save the DataFrame back to CSV
     df.to_csv(file_path, index=False)
 
 # Streamlit app
-st.title('African Languages Prompt Generator App')
+st.title('African Languages Prompt Generator')
 
 # Step 1: Language selection
-language = st.selectbox("Select a language", ['Sesotho', 'IsiZulu', 'IsiXhosa'])
+language = st.selectbox("Select a language", ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch'])
 
 # Step 2: Topic selection
 selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys()))
@@ -48,19 +55,25 @@ selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys
 # Step 3: Subtopic selection (filtered by selected topic)
 selected_subtopic = st.selectbox("Select a subtopic", topic_subtopic_mapping[selected_topic])
 
-# Step 4: Create new prompt input field
+# Step 4: Use session state to store user name (so they don't have to enter it each time)
+if 'user_name' not in st.session_state:
+    st.session_state.user_name = st.text_input("Enter your name (this will be tracked)", "")
+
+user_name = st.session_state.user_name
+
+# Step 5: Create new prompt input field
 new_prompt = st.text_input("Enter your new prompt")
 
-# Step 5: Add the new prompt to the CSV file for the selected language, topic, and subtopic
+# Step 6: Add the new prompt to the CSV file for the selected language, topic, and subtopic
 if st.button("Save Prompt"):
-    if new_prompt:
-        save_prompt_to_csv(language, selected_topic, selected_subtopic, new_prompt)
-        st.success(f"Prompt saved for {selected_subtopic} in {language} under {selected_topic}!")
+    if new_prompt and user_name:
+        save_prompt_to_csv(language, selected_topic, selected_subtopic, new_prompt, user_name)
+        st.success(f"Prompt saved for {selected_subtopic} in {language} under {selected_topic} by {user_name}!")
     else:
-        st.error("Please enter a prompt before saving.")
+        st.error("Please enter a prompt and your name before saving.")
 
-# Step 6: Option to view existing prompts
-if st.button("View Existing Prompts"):
+# Step 7: Option to view existing prompts and download CSV file
+if st.button("View and Download Existing Prompts"):
     # Load and display existing prompts for the selected subtopic
     file_path = os.path.join(DATA_DIR, f"{language}_{selected_topic}_{selected_subtopic}.csv")
     
@@ -68,8 +81,18 @@ if st.button("View Existing Prompts"):
         df = pd.read_csv(file_path)
         st.write(f"Existing prompts for {selected_subtopic} under {selected_topic} in {language}:")
         st.dataframe(df)
+
+        # Allow users to download the CSV file
+        csv = df.to_csv(index=False)
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name=f"{language}_{selected_topic}_{selected_subtopic}_prompts.csv",
+            mime="text/csv"
+        )
     else:
         st.warning("No prompts available yet for this subtopic.")
+
 
 
 
