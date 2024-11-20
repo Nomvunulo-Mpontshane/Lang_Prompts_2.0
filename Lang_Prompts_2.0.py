@@ -12,6 +12,14 @@ import os
 DATA_DIR = "prompts_data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Define a mapping of topics to their respective subtopics
+topic_subtopic_mapping = {
+    'Technology': ['AI', 'Blockchain', 'Cybersecurity', 'Cloud Computing'],
+    'Sports': ['Football', 'Basketball', 'Tennis', 'Cricket'],
+    'Health': ['Nutrition', 'Fitness', 'Mental Health', 'Wellness'],
+    'Education': ['Online Learning', 'Curriculum Design', 'Educational Psychology'],
+}
+
 # Function to save prompts into CSV
 def save_prompt_to_csv(language, topic, subtopic, prompt):
     # Construct file name for the CSV based on language, topic, and subtopic
@@ -29,18 +37,16 @@ def save_prompt_to_csv(language, topic, subtopic, prompt):
     df.to_csv(file_path, index=False)
 
 # Streamlit app
-st.title('Prompt Generator with Dynamic Prompt Saving')
+st.title('Prompt Generator with Dynamic Topic-Subtopic Correlation')
 
 # Step 1: Language selection
-language = st.selectbox("Select a language", ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch'])
+language = st.selectbox("Select a language", ['Sesotho', 'IsiZulu', 'IsiXhosa'])
 
 # Step 2: Topic selection
-topics = ['Technology', 'Sports']
-selected_topic = st.selectbox("Select a topic", topics)
+selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys()))
 
-# Step 3: Subtopic selection
-subtopics = ['AI', 'Blockchain', 'Football', 'Basketball']
-selected_subtopic = st.selectbox("Select a subtopic", subtopics)
+# Step 3: Subtopic selection (filtered by selected topic)
+selected_subtopic = st.selectbox("Select a subtopic", topic_subtopic_mapping[selected_topic])
 
 # Step 4: Create new prompt input field
 new_prompt = st.text_input("Enter your new prompt")
@@ -64,6 +70,7 @@ if st.button("View Existing Prompts"):
         st.dataframe(df)
     else:
         st.warning("No prompts available yet for this subtopic.")
+
 
 
 # In[ ]:
