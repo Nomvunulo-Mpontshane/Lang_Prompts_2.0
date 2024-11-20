@@ -8,6 +8,43 @@ import io
 # Define the SQLite database
 DB_NAME = 'prompts.db'
 
+# Define a mapping of topics to their respective subtopics
+topic_subtopic_mapping = {
+    'Agriculture': ['Agricultural Products and Sectors', 'Foraging for Edible Plants', 'Role of Agriculture in SA Economy', 'Climate Change and Agriculture'],
+    'Health': ['Clinics and Hospitals', 'Medication', 'Family Planning', 'Aged Care', 'Health Conditions', 'Traditional Medicine', 'Emergency Services'],
+    'General': ['Education', 'Transport', 'Finance', 'Sports and Hobbies'],
+}
+
+# Define scenarios for each subtopic
+subtopic_scenario_mapping = {
+    'Agricultural Products and Sectors': ['Crop Farming', 'Livestock', 'Aquaculture'],
+    'Foraging for Edible Plants': ['Urban Foraging', 'Traditional Practices', 'Foraging Safety'],
+    'Role of Agriculture in SA Economy': ['Exports', 'Local Markets', 'Employment'],
+    'Climate Change and Agriculture': ['Impact on Crop Yields', 'Water Scarcity', 'Sustainable Practices'],
+    'Clinics and Hospitals': ['Patient Care', 'Staffing Issues', 'Infrastructure'],
+    'Medication': ['Drug Access', 'Counterfeit Medicines', 'Pharmaceutical Research'],
+    'Family Planning': ['Access to Contraceptives', 'Community Education', 'Policy Impacts'],
+    'Aged Care': ['Home Care Services', 'Elderly Rights', 'Retirement Planning'],
+    'Health Conditions': ['Chronic Diseases', 'Infectious Diseases', 'Mental Health'],
+    'Traditional Medicine': ['Herbal Remedies', 'Cultural Practices', 'Integration with Modern Medicine'],
+    'Emergency Services': ['Ambulance Availability', 'Disaster Response', 'Public Awareness'],
+    'Education': ['E-learning', 'Access to Education', 'Policy Reform'],
+    'Transport': ['Public Transport', 'Road Safety', 'Infrastructure Development'],
+    'Finance': ['Personal Finance', 'Economic Trends', 'Digital Banking'],
+    'Sports and Hobbies': ['Youth Participation', 'Sports Facilities', 'Leisure Activities'],
+}
+
+# Define keywords for each scenario
+scenario_keyword_mapping = {
+    'Crop Farming': ['Pests', 'Fertilizers', 'Irrigation'],
+    'Livestock': ['Cattle', 'Poultry', 'Dairy'],
+    'Aquaculture': ['Fish Farming', 'Shellfish', 'Algae'],
+    'Urban Foraging': ['City Parks', 'Community Gardens', 'Safety Measures'],
+    'Traditional Practices': ['Cultural Knowledge', 'Native Plants', 'Harvesting Techniques'],
+    'Foraging Safety': ['Toxic Plants', 'Identification', 'Preparation'],
+    # Add more mappings as needed for other scenarios...
+}
+
 # Function to initialize the database and create the prompts table
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -49,22 +86,6 @@ def save_prompt_to_db(language, topic, subtopic, scenario, keyword, prompt, user
     conn.commit()
     conn.close()
 
-# Function to get prompts by subtopic or scenario for CSV download
-def get_prompts_by_subtopic_or_scenario(subtopic=None, scenario=None):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    if subtopic:
-        cursor.execute('''SELECT * FROM prompts WHERE subtopic = ?''', (subtopic,))
-    elif scenario:
-        cursor.execute('''SELECT * FROM prompts WHERE scenario = ?''', (scenario,))
-    else:
-        return []
-    
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
-
 # Streamlit app
 st.title('Prompt Generator for ANV Project')
 
@@ -91,18 +112,14 @@ selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys
 selected_subtopic = st.selectbox("Select a subtopic", topic_subtopic_mapping[selected_topic])
 
 # Step 4: Scenario selection
+selected_scenario = None
 if selected_subtopic in subtopic_scenario_mapping:
     selected_scenario = st.selectbox("Select a scenario", subtopic_scenario_mapping[selected_subtopic])
-else:
-    selected_scenario = None
-    st.warning("No scenarios available for this subtopic.")
 
 # Step 5: Keyword selection
+selected_keyword = None
 if selected_scenario in scenario_keyword_mapping:
     selected_keyword = st.selectbox("Select a keyword", scenario_keyword_mapping[selected_scenario])
-else:
-    selected_keyword = None
-    st.warning("No keywords available for this scenario.")
 
 # Step 6: Prompt input
 new_prompt = st.text_input("Enter your new prompt")
