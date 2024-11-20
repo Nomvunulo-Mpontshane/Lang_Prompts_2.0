@@ -1,18 +1,34 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-#!/usr/bin/env python
-# coding: utf-8
-
 import streamlit as st
 import pandas as pd
 import os
+import sqlite3
 from datetime import datetime
 import pytz
 
 # Define the directory to store CSV files
 DATA_DIR = "prompts_data"
 os.makedirs(DATA_DIR, exist_ok=True)
+
+# Database setup
+DB_FILE = "prompts.db"
+conn = sqlite3.connect(DB_FILE)
+cursor = conn.cursor()
+
+# Create table if it doesn't exist
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS prompts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt TEXT,
+    user TEXT,
+    timestamp TEXT,
+    language TEXT,
+    topic TEXT,
+    subtopic TEXT,
+    scenario TEXT,
+    keyword TEXT
+)
+""")
+conn.commit()
 
 # Define a mapping of topics to their respective subtopics
 topic_subtopic_mapping = {
@@ -48,43 +64,19 @@ scenario_keyword_mapping = {
     'Urban Foraging': ['City Parks', 'Community Gardens', 'Safety Measures'],
     'Traditional Practices': ['Cultural Knowledge', 'Native Plants', 'Harvesting Techniques'],
     'Foraging Safety': ['Toxic Plants', 'Identification', 'Preparation'],
-    # Add more mappings as needed for other scenarios...
 }
 
-# Function to save prompts into a CSV file
-def save_prompt_to_csv(language, topic, subtopic, scenario, keyword, prompt, user_name):
+# Function to save prompts into the database
+def save_prompt_to_db(language, topic, subtopic, scenario, keyword, prompt, user_name):
     # Define your timezone (example: 'Africa/Johannesburg' for South Africa)
     local_tz = pytz.timezone('Africa/Johannesburg')
-
-    # Get the current time in UTC and then convert it to the local timezone
-    timestamp_utc = datetime.now(pytz.utc)
-    timestamp_local = timestamp_utc.astimezone(local_tz)
-    timestamp_str = timestamp_local.strftime('%Y-%m-%d %H:%M:%S')
-
-    # Construct file path based on language, topic, subtopic, scenario, and keyword
-    file_path = os.path.join(DATA_DIR, f"{language}_{topic}_{subtopic}_{scenario}_{keyword}.csv")
-
-    # Prepare the prompt data
-    prompt_data = {
-        "Prompt": prompt,
-        "User": user_name,
-        "Timestamp": timestamp_str,
-        "Language": language,
-        "Topic": topic,
-        "Subtopic": subtopic,
-        "Scenario": scenario,
-        "Keyword": keyword,
-    }
-
-    # Append the prompt data to the CSV or create a new one
-    if os.path.exists(file_path):
-        df = pd.read_csv(file_path)
-        df = pd.concat([df, pd.DataFrame([prompt_data])], ignore_index=True)
-    else:
-        df = pd.DataFrame([prompt_data])
-
-    # Save the updated DataFrame to the CSV
-    df.to_csv(file_path, index=False)
+    timestamp = datetime.now(pytz.utc).astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')
+    
+    cursor.execute("""
+    INSERT INTO prompts (prompt, user, timestamp, language, topic, subtopic, scenario, keyword)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (prompt, user_name, timestamp, language, topic, subtopic, scenario, keyword))
+    conn.commit()
 
 # Streamlit app
 st.title('Prompt Generator for ANV Project')
@@ -128,45 +120,35 @@ new_prompt = st.text_input("Enter your new prompt")
 # Save the prompt
 if st.button("Save Prompt"):
     if new_prompt and st.session_state.user_name and selected_keyword:
-        save_prompt_to_csv(language, selected_topic, selected_subtopic, selected_scenario, selected_keyword, new_prompt, st.session_state.user_name)
-        st.success(f"Prompt saved for {selected_keyword} in {language} under {selected_scenario}, {selected_subtopic}, and {selected_topic} by {st.session_state.user_name}!")
-    elif not st.session_state.user_name:
-        st.error("Please enter your name before saving the prompt.")
-    elif not selected_keyword:
-        st.error("Please select a keyword.")
+        save_prompt_to_db(language, selected_topic, selected_subtopic, selected_scenario, selected_keyword, new_prompt, st.session_state.user_name)
+        st.success(f"Prompt saved!")
     else:
-        st.error("Please enter a prompt before saving.")
+        st.error("Please fill in all fields before saving the prompt.")
 
-# View existing prompts
-if st.button("View Existing Prompts"):
-    if selected_keyword:
-        file_path = os.path.join(DATA_DIR, f"{language}_{selected_topic}_{selected_subtopic}_{selected_scenario}_{selected_keyword}.csv")
-        if os.path.exists(file_path):
-            df = pd.read_csv(file_path)
-            st.write(f"Existing prompts for {selected_keyword} under {selected_scenario}, {selected_subtopic}, and {selected_topic} in {language}:")
-            st.dataframe(df)
-        else:
-            st.warning("No prompts available yet for this keyword.")
+# Search prompts
+st.subheader("Search Prompts")
+search_query = st.text_input("Search by keyword, topic, or prompt content")
+if st.button("Search"):
+    cursor.execute("""
+    SELECT * FROM prompts
+    WHERE prompt LIKE ? OR keyword LIKE ? OR topic LIKE ?
+    """, (f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"))
+    search_results = cursor.fetchall()
+    if search_results:
+        df = pd.DataFrame(search_results, columns=['ID', 'Prompt', 'User', 'Timestamp', 'Language', 'Topic', 'Subtopic', 'Scenario', 'Keyword'])
+        st.dataframe(df)
     else:
-        st.error("Please select a keyword to view prompts.")
+        st.warning("No results found.")
 
-# Download existing prompts
-if st.button("Download Prompts as CSV"):
-    if selected_keyword:
-        file_path = os.path.join(DATA_DIR, f"{language}_{selected_topic}_{selected_subtopic}_{selected_scenario}_{selected_keyword}.csv")
-        if os.path.exists(file_path):
-            df = pd.read_csv(file_path)
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name=f"{language}_{selected_topic}_{selected_subtopic}_{selected_scenario}_{selected_keyword}_prompts.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning("No prompts available yet for download.")
-    else:
-        st.error("Please select a keyword to download prompts.")
-
-
-
+# Download prompts as CSV
+if st.button("Download All Prompts as CSV"):
+    cursor.execute("SELECT * FROM prompts")
+    all_prompts = cursor.fetchall()
+    df = pd.DataFrame(all_prompts, columns=['ID', 'Prompt', 'User', 'Timestamp', 'Language', 'Topic', 'Subtopic', 'Scenario', 'Keyword'])
+    csv = df.to_csv(index=False)
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name="all_prompts.csv",
+        mime="text/csv"
+    )
