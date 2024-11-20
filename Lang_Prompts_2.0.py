@@ -118,6 +118,30 @@ if st.button("Download Prompts as CSV"):
     else:
         st.warning("No prompts available yet for download.")
 
+    file_path = os.path.join(DATA_DIR, f"{language}_{topic}_{subtopic}.csv")
+
+    # Prompt data to be saved, including new columns
+    prompt_data = {
+        "Prompt": prompt,
+        "User": user_name,
+        "Timestamp": timestamp_str,
+        "Language": language,  # Add language as a column
+        "Topic": topic,        # Add topic as a column
+        "Subtopic": subtopic,  # Add subtopic as a column
+        "Topic Description": topic_description,  # New column
+        "Subtopic Details": subtopic_details,  # New column
+    }
+
+    # Append the prompt data to the CSV file or create a new one
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        df = df.append(prompt_data, ignore_index=True)
+    else:
+        df = pd.DataFrame([prompt_data])
+
+    # Save the updated DataFrame to CSV
+    df.to_csv(file_path, index=False)
+
 
 
 
