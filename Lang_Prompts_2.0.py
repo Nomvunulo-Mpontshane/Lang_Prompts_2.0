@@ -37,7 +37,7 @@ def save_prompt_to_csv(language, topic, subtopic, prompt):
     df.to_csv(file_path, index=False)
 
 # Streamlit app
-st.title('Prompt Generator with Dynamic Topic-Subtopic Correlation')
+st.title('African Languages Prompt Generator App')
 
 # Step 1: Language selection
 language = st.selectbox("Select a language", ['Sesotho', 'IsiZulu', 'IsiXhosa'])
