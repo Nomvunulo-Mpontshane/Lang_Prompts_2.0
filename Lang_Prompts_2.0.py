@@ -1,85 +1,75 @@
+import sqlite3
 import streamlit as st
 import pandas as pd
-import os
-import sqlite3
 from datetime import datetime
 import pytz
+import io
 
-# Define the directory to store CSV files
-DATA_DIR = "prompts_data"
-os.makedirs(DATA_DIR, exist_ok=True)
+# Define the SQLite database
+DB_NAME = 'prompts.db'
 
-# Database setup
-DB_FILE = "prompts.db"
-conn = sqlite3.connect(DB_FILE)
-cursor = conn.cursor()
+# Function to initialize the database and create the prompts table
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    # Create table if it doesn't exist
+    cursor.execute('''CREATE TABLE IF NOT EXISTS prompts (
+                        id INTEGER PRIMARY KEY,
+                        language TEXT,
+                        topic TEXT,
+                        subtopic TEXT,
+                        scenario TEXT,
+                        keyword TEXT,
+                        prompt TEXT,
+                        user_name TEXT,
+                        timestamp TEXT)''')
+    conn.commit()
+    conn.close()
 
-# Create table if it doesn't exist
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS prompts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    prompt TEXT,
-    user TEXT,
-    timestamp TEXT,
-    language TEXT,
-    topic TEXT,
-    subtopic TEXT,
-    scenario TEXT,
-    keyword TEXT
-)
-""")
-conn.commit()
-
-# Define a mapping of topics to their respective subtopics
-topic_subtopic_mapping = {
-    'Agriculture': ['Agricultural Products and Sectors', 'Foraging for Edible Plants', 'Role of Agriculture in SA Economy', 'Climate Change and Agriculture'],
-    'Health': ['Clinics and Hospitals', 'Medication', 'Family Planning', 'Aged Care', 'Health Conditions', 'Traditional Medicine', 'Emergency Services'],
-    'General': ['Education', 'Transport', 'Finance', 'Sports and Hobbies'],
-}
-
-# Define scenarios for each subtopic
-subtopic_scenario_mapping = {
-    'Agricultural Products and Sectors': ['Crop Farming', 'Livestock', 'Aquaculture'],
-    'Foraging for Edible Plants': ['Urban Foraging', 'Traditional Practices', 'Foraging Safety'],
-    'Role of Agriculture in SA Economy': ['Exports', 'Local Markets', 'Employment'],
-    'Climate Change and Agriculture': ['Impact on Crop Yields', 'Water Scarcity', 'Sustainable Practices'],
-    'Clinics and Hospitals': ['Patient Care', 'Staffing Issues', 'Infrastructure'],
-    'Medication': ['Drug Access', 'Counterfeit Medicines', 'Pharmaceutical Research'],
-    'Family Planning': ['Access to Contraceptives', 'Community Education', 'Policy Impacts'],
-    'Aged Care': ['Home Care Services', 'Elderly Rights', 'Retirement Planning'],
-    'Health Conditions': ['Chronic Diseases', 'Infectious Diseases', 'Mental Health'],
-    'Traditional Medicine': ['Herbal Remedies', 'Cultural Practices', 'Integration with Modern Medicine'],
-    'Emergency Services': ['Ambulance Availability', 'Disaster Response', 'Public Awareness'],
-    'Education': ['E-learning', 'Access to Education', 'Policy Reform'],
-    'Transport': ['Public Transport', 'Road Safety', 'Infrastructure Development'],
-    'Finance': ['Personal Finance', 'Economic Trends', 'Digital Banking'],
-    'Sports and Hobbies': ['Youth Participation', 'Sports Facilities', 'Leisure Activities'],
-}
-
-# Define keywords for each scenario
-scenario_keyword_mapping = {
-    'Crop Farming': ['Pests', 'Fertilizers', 'Irrigation'],
-    'Livestock': ['Cattle', 'Poultry', 'Dairy'],
-    'Aquaculture': ['Fish Farming', 'Shellfish', 'Algae'],
-    'Urban Foraging': ['City Parks', 'Community Gardens', 'Safety Measures'],
-    'Traditional Practices': ['Cultural Knowledge', 'Native Plants', 'Harvesting Techniques'],
-    'Foraging Safety': ['Toxic Plants', 'Identification', 'Preparation'],
-}
-
-# Function to save prompts into the database
+# Function to save prompts to the database
 def save_prompt_to_db(language, topic, subtopic, scenario, keyword, prompt, user_name):
     # Define your timezone (example: 'Africa/Johannesburg' for South Africa)
     local_tz = pytz.timezone('Africa/Johannesburg')
-    timestamp = datetime.now(pytz.utc).astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')
-    
-    cursor.execute("""
-    INSERT INTO prompts (prompt, user, timestamp, language, topic, subtopic, scenario, keyword)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (prompt, user_name, timestamp, language, topic, subtopic, scenario, keyword))
+
+    # Get the current time in UTC and then convert it to the local timezone
+    timestamp_utc = datetime.now(pytz.utc)
+    timestamp_local = timestamp_utc.astimezone(local_tz)
+    timestamp_str = timestamp_local.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Connect to the SQLite database
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # Insert the new prompt into the table
+    cursor.execute('''INSERT INTO prompts (language, topic, subtopic, scenario, keyword, prompt, user_name, timestamp) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                   (language, topic, subtopic, scenario, keyword, prompt, user_name, timestamp_str))
+
     conn.commit()
+    conn.close()
+
+# Function to get prompts by subtopic or scenario for CSV download
+def get_prompts_by_subtopic_or_scenario(subtopic=None, scenario=None):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    if subtopic:
+        cursor.execute('''SELECT * FROM prompts WHERE subtopic = ?''', (subtopic,))
+    elif scenario:
+        cursor.execute('''SELECT * FROM prompts WHERE scenario = ?''', (scenario,))
+    else:
+        return []
+    
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
 
 # Streamlit app
 st.title('Prompt Generator for ANV Project')
+
+# Initialize the database
+init_db()
 
 # Use session state to store user name
 if 'user_name' not in st.session_state:
@@ -121,34 +111,50 @@ new_prompt = st.text_input("Enter your new prompt")
 if st.button("Save Prompt"):
     if new_prompt and st.session_state.user_name and selected_keyword:
         save_prompt_to_db(language, selected_topic, selected_subtopic, selected_scenario, selected_keyword, new_prompt, st.session_state.user_name)
-        st.success(f"Prompt saved!")
+        st.success(f"Prompt saved for {selected_keyword} in {language} under {selected_scenario}, {selected_subtopic}, and {selected_topic} by {st.session_state.user_name}!")
+    elif not st.session_state.user_name:
+        st.error("Please enter your name before saving the prompt.")
+    elif not selected_keyword:
+        st.error("Please select a keyword.")
     else:
-        st.error("Please fill in all fields before saving the prompt.")
+        st.error("Please enter a prompt before saving.")
 
-# Search prompts
-st.subheader("Search Prompts")
-search_query = st.text_input("Search by keyword, topic, or prompt content")
-if st.button("Search"):
-    cursor.execute("""
-    SELECT * FROM prompts
-    WHERE prompt LIKE ? OR keyword LIKE ? OR topic LIKE ?
-    """, (f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"))
-    search_results = cursor.fetchall()
-    if search_results:
-        df = pd.DataFrame(search_results, columns=['ID', 'Prompt', 'User', 'Timestamp', 'Language', 'Topic', 'Subtopic', 'Scenario', 'Keyword'])
-        st.dataframe(df)
-    else:
-        st.warning("No results found.")
+# **Download CSV feature:**
+# Choose subtopic or scenario for which to download prompts
+download_choice = st.selectbox("Download prompts for which subtopic or scenario?", ["Subtopic", "Scenario"])
 
-# Download prompts as CSV
-if st.button("Download All Prompts as CSV"):
-    cursor.execute("SELECT * FROM prompts")
-    all_prompts = cursor.fetchall()
-    df = pd.DataFrame(all_prompts, columns=['ID', 'Prompt', 'User', 'Timestamp', 'Language', 'Topic', 'Subtopic', 'Scenario', 'Keyword'])
-    csv = df.to_csv(index=False)
-    st.download_button(
-        label="Download CSV",
-        data=csv,
-        file_name="all_prompts.csv",
-        mime="text/csv"
-    )
+if download_choice == "Subtopic":
+    subtopic = st.selectbox("Select subtopic to download prompts for", topic_subtopic_mapping[selected_topic])
+    if subtopic:
+        prompts = get_prompts_by_subtopic_or_scenario(subtopic=subtopic)
+        if prompts:
+            # Convert the prompts to a Pandas DataFrame
+            df = pd.DataFrame(prompts, columns=["ID", "Language", "Topic", "Subtopic", "Scenario", "Keyword", "Prompt", "User Name", "Timestamp"])
+            # Download the dataframe as a CSV file
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name=f"{subtopic}_prompts.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning(f"No prompts available for subtopic: {subtopic}")
+
+elif download_choice == "Scenario":
+    scenario = st.selectbox("Select scenario to download prompts for", subtopic_scenario_mapping[selected_subtopic])
+    if scenario:
+        prompts = get_prompts_by_subtopic_or_scenario(scenario=scenario)
+        if prompts:
+            # Convert the prompts to a Pandas DataFrame
+            df = pd.DataFrame(prompts, columns=["ID", "Language", "Topic", "Subtopic", "Scenario", "Keyword", "Prompt", "User Name", "Timestamp"])
+            # Download the dataframe as a CSV file
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name=f"{scenario}_prompts.csv",
+                mime="text/csv"
+            )
+        else:
+            st.warning(f"No prompts available for scenario: {scenario}")
