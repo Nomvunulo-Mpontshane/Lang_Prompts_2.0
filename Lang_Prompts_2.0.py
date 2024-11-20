@@ -8,6 +8,16 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+import pytz
+
+def save_prompt_to_csv(language, topic, subtopic, prompt, user_name):
+    # Define your timezone (example: 'Africa/Johannesburg' for South Africa)
+    local_tz = pytz.timezone('Africa/Johannesburg')  # Change this to your timezone if different
+
+    # Get the current time in UTC and then convert it to the local timezone
+    timestamp_utc = datetime.now(pytz.utc)
+    timestamp_local = timestamp_utc.astimezone(local_tz)
+    timestamp_str = timestamp_local.strftime('%Y-%m-%d %H:%M:%S')
 
 # Sample directory to store CSV files
 DATA_DIR = "prompts_data"
