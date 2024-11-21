@@ -1,12 +1,28 @@
-import sqlite3
 import streamlit as st
 import pandas as pd
+import sqlite3
 from datetime import datetime
 import pytz
-import io
 
-# Define the SQLite database
-DB_NAME = 'prompts.db'
+# Initialize SQLite database
+conn = sqlite3.connect("prompts_data.db")
+cursor = conn.cursor()
+
+# Create table if it doesn't exist
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS prompts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    language TEXT,
+    topic TEXT,
+    subtopic TEXT,
+    scenario TEXT,
+    keyword TEXT,
+    prompt TEXT,
+    user_name TEXT,
+    timestamp TEXT
+)
+""")
+conn.commit()
 
 # Define a mapping of topics to their respective subtopics
 topic_subtopic_mapping = {
@@ -45,26 +61,7 @@ scenario_keyword_mapping = {
     # Add more mappings as needed for other scenarios...
 }
 
-# Function to initialize the database and create the prompts table
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    # Create table if it doesn't exist
-    cursor.execute('''CREATE TABLE IF NOT EXISTS prompts (
-                        id INTEGER PRIMARY KEY,
-                        language TEXT,
-                        topic TEXT,
-                        subtopic TEXT,
-                        scenario TEXT,
-                        keyword TEXT,
-                        prompt TEXT,
-                        user_name TEXT,
-                        timestamp TEXT)''')
-    conn.commit()
-    conn.close()
-
-# Function to save prompts to the database
+# Function to save prompts into the database
 def save_prompt_to_db(language, topic, subtopic, scenario, keyword, prompt, user_name):
     # Define your timezone (example: 'Africa/Johannesburg' for South Africa)
     local_tz = pytz.timezone('Africa/Johannesburg')
@@ -74,41 +71,15 @@ def save_prompt_to_db(language, topic, subtopic, scenario, keyword, prompt, user
     timestamp_local = timestamp_utc.astimezone(local_tz)
     timestamp_str = timestamp_local.strftime('%Y-%m-%d %H:%M:%S')
 
-    # Connect to the SQLite database
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    # Insert the new prompt into the table
-    cursor.execute('''INSERT INTO prompts (language, topic, subtopic, scenario, keyword, prompt, user_name, timestamp) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                   (language, topic, subtopic, scenario, keyword, prompt, user_name, timestamp_str))
-
+    # Insert the prompt data into the database
+    cursor.execute("""
+    INSERT INTO prompts (language, topic, subtopic, scenario, keyword, prompt, user_name, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (language, topic, subtopic, scenario, keyword, prompt, user_name, timestamp_str))
     conn.commit()
-    conn.close()
-
-# Function to get prompts by subtopic or scenario
-def get_prompts_by_subtopic_or_scenario(subtopic=None, scenario=None):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    # If subtopic is provided, get prompts for the given subtopic
-    if subtopic:
-        cursor.execute('''SELECT * FROM prompts WHERE subtopic = ?''', (subtopic,))
-    # If scenario is provided, get prompts for the given scenario
-    elif scenario:
-        cursor.execute('''SELECT * FROM prompts WHERE scenario = ?''', (scenario,))
-    else:
-        return []
-
-    prompts = cursor.fetchall()
-    conn.close()
-    return prompts
 
 # Streamlit app
 st.title('Prompt Generator for ANV Project')
-
-# Initialize the database
-init_db()
 
 # Use session state to store user name
 if 'user_name' not in st.session_state:
@@ -130,14 +101,18 @@ selected_topic = st.selectbox("Select a topic", list(topic_subtopic_mapping.keys
 selected_subtopic = st.selectbox("Select a subtopic", topic_subtopic_mapping[selected_topic])
 
 # Step 4: Scenario selection
-selected_scenario = None
 if selected_subtopic in subtopic_scenario_mapping:
     selected_scenario = st.selectbox("Select a scenario", subtopic_scenario_mapping[selected_subtopic])
+else:
+    selected_scenario = None
+    st.warning("No scenarios available for this subtopic.")
 
 # Step 5: Keyword selection
-selected_keyword = None
 if selected_scenario in scenario_keyword_mapping:
     selected_keyword = st.selectbox("Select a keyword", scenario_keyword_mapping[selected_scenario])
+else:
+    selected_keyword = None
+    st.warning("No keywords available for this scenario.")
 
 # Step 6: Prompt input
 new_prompt = st.text_input("Enter your new prompt")
@@ -154,42 +129,39 @@ if st.button("Save Prompt"):
     else:
         st.error("Please enter a prompt before saving.")
 
-# **Download CSV feature:**
-# Choose subtopic or scenario for which to download prompts
-download_choice = st.selectbox("Download prompts for which subtopic or scenario?", ["Subtopic", "Scenario"])
+# View existing prompts
+if st.button("View Existing Prompts"):
+    if selected_keyword:
+        query = """
+        SELECT * FROM prompts
+        WHERE language = ? AND topic = ? AND subtopic = ? AND scenario = ? AND keyword = ?
+        """
+        prompts_df = pd.read_sql(query, conn, params=(language, selected_topic, selected_subtopic, selected_scenario, selected_keyword))
+        if not prompts_df.empty:
+            st.write(f"Existing prompts for {selected_keyword} under {selected_scenario}, {selected_subtopic}, and {selected_topic} in {language}:")
+            st.dataframe(prompts_df)
+        else:
+            st.warning("No prompts available yet for this keyword.")
+    else:
+        st.error("Please select a keyword to view prompts.")
 
-if download_choice == "Subtopic":
-    subtopic = st.selectbox("Select subtopic to download prompts for", topic_subtopic_mapping[selected_topic])
-    if subtopic:
-        prompts = get_prompts_by_subtopic_or_scenario(subtopic=subtopic)
-        if prompts:
-            # Convert the prompts to a Pandas DataFrame
-            df = pd.DataFrame(prompts, columns=["ID", "Language", "Topic", "Subtopic", "Scenario", "Keyword", "Prompt", "User Name", "Timestamp"])
-            # Download the dataframe as a CSV file
-            csv = df.to_csv(index=False)
+# Download existing prompts
+if st.button("Download Prompts as CSV"):
+    if selected_keyword:
+        query = """
+        SELECT * FROM prompts
+        WHERE language = ? AND topic = ? AND subtopic = ? AND scenario = ? AND keyword = ?
+        """
+        prompts_df = pd.read_sql(query, conn, params=(language, selected_topic, selected_subtopic, selected_scenario, selected_keyword))
+        if not prompts_df.empty:
+            csv = prompts_df.to_csv(index=False)
             st.download_button(
                 label="Download CSV",
                 data=csv,
-                file_name=f"{subtopic}_prompts.csv",
+                file_name=f"{language}_{selected_topic}_{selected_subtopic}_{selected_scenario}_{selected_keyword}_prompts.csv",
                 mime="text/csv"
             )
         else:
-            st.warning(f"No prompts available for subtopic: {subtopic}")
-
-elif download_choice == "Scenario":
-    scenario = st.selectbox("Select scenario to download prompts for", subtopic_scenario_mapping[selected_subtopic])
-    if scenario:
-        prompts = get_prompts_by_subtopic_or_scenario(scenario=scenario)
-        if prompts:
-            # Convert the prompts to a Pandas DataFrame
-            df = pd.DataFrame(prompts, columns=["ID", "Language", "Topic", "Subtopic", "Scenario", "Keyword", "Prompt", "User Name", "Timestamp"])
-            # Download the dataframe as a CSV file
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name=f"{scenario}_prompts.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning(f"No prompts available for scenario: {scenario}")
+            st.warning("No prompts available yet for download.")
+    else:
+        st.error("Please select a keyword to download prompts.")
